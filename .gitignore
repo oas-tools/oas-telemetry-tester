@@ -1,0 +1,5 @@
+## node.js with ts gitignore
+node_modules
+dist
+*.env
+*.log

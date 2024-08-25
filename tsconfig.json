@@ -1,0 +1,14 @@
+{
+    "compilerOptions": {
+      "module": "system",
+      "noImplicitAny": true,
+      "preserveConstEnums": true,
+      "esModuleInterop": true,
+      "outDir": "./dist",               
+      "rootDir": "./src", 
+      "sourceMap": true,
+      "forceConsistentCasingInFileNames": true
+    },
+    "include": ["src/**/*"],
+    "exclude": ["**/*.spec.ts"]
+}

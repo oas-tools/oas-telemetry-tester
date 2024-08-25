@@ -1,0 +1,31 @@
+{
+  "name": "oas-telemetry-tester",
+  "version": "1.0.0",
+  "description": "Tests for oas-tools/oas-telemetry using node.js and ts",
+  "main": "dist/index.js",
+  "engines": {
+    "node": ">=20.0.0 <22.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/motero2k/oas-telemetry-tester.git"
+  },
+  "keywords": [],
+  "author": "Manuel Otero",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/motero2k/oas-telemetry-tester/issues"
+  },
+  "homepage": "https://github.com/motero2k/oas-telemetry-tester#readme",
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  }
+}
