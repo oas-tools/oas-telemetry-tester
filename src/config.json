@@ -1,0 +1,65 @@
+[
+    {
+        "id": "TC-001",
+        "description": "Small number of petitions. Compares CPU and memory usage between the original app and the app with the telemetry package.",
+        "variants": [
+            {
+                "id": "WITHOUT_TLM",
+                "description": "Original app without telemetry package",
+                "parameters": {
+                    "fixed": {
+                        "telemetryInApp": false
+                    }
+                }
+            },
+            {
+                "id": "WITH_TLM",
+                "description": "App with telemetry package",
+                "parameters": {
+                    "fixed": {
+                        "telemetryInApp": true
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "TC-002",
+        "description": "one third of petitions with telemetry, one third of petitions with telemetry but stopped and one third of petitions without telemetry. Compares CPU and memory usage between the original app and the app with the telemetry package.",
+        "variants": [
+            {
+                "id": "WITH_TLM",
+                "description": "App with telemetry package",
+                "parameters": {
+                    "fixed": {
+                        "telemetryInApp": true
+                    }
+                }
+            }
+        ]
+    },
+    {
+        "id": "TC-003",
+        "description": "Large number of petitions. Compares CPU and memory usage between the original app and the app with the telemetry package.",
+        "variants": [
+            {
+                "id": "WITHOUT_TLM",
+                "description": "Original app without telemetry package",
+                "parameters": {
+                    "fixed": {
+                        "telemetryInApp": false
+                    }
+                }
+            },
+            {
+                "id": "WITH_TLM",
+                "description": "App with telemetry package",
+                "parameters": {
+                    "fixed": {
+                        "telemetryInApp": true
+                    }
+                }
+            }
+        ]
+    }
+]
