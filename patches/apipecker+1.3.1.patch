@@ -1,0 +1,31 @@
+diff --git a/node_modules/apipecker/src/index.js b/node_modules/apipecker/src/index.js
+index 8147f32..255d25d 100644
+--- a/node_modules/apipecker/src/index.js
++++ b/node_modules/apipecker/src/index.js
+@@ -29,10 +29,9 @@ function log(s){
+ 
+ 
+ function run(config){
+-
+     const concurrentUsers = config.concurrentUsers;
+     const iterations = config.iterations;
+-    const delay = config.delay;
++    let delay = config.delay;
+     var  url = config.url;
+     const verbose = config.verbose;
+     const method = config.method;
+@@ -244,9 +243,12 @@ function run(config){
+             }
+         });
+     }
+-    
++    let acumulatedDelay = 0;
+     for (var i = 1; i <= iterations; i++) {
+-        setTimeout(requestLot, (delay * (i - 1)), "iteration" + i, harvester);
++        var finalDelay = delay;
++        if (typeof delay === 'function') finalDelay = delay(i);
++        setTimeout(requestLot, acumulatedDelay, "iteration-" + i, harvester);
++        acumulatedDelay += finalDelay;
+     }
+         
+     function harvester(iterationResult) {

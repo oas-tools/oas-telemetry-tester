@@ -16,14 +16,13 @@ const configTC001: any = {
     }
 }
 const variants = generateCombinations(configTC001);
-console.log(variants);
 
-//Run tests registry app
-variants.forEach((variant: any) => {
+// //Run tests registry app
+// variants.forEach((variant: any) => {
 
-    let registryTC001Config = variant;
-    const registryVariant = new RegistryTelemetryEnablerVariant(registryTC001Config);
+//     let registryTC001Config = variant;
+//     const registryVariant = new RegistryTelemetryEnablerVariant(registryTC001Config);
 
-    const registryTC001: Executable = new TelemetryEnablerRunner(registryVariant);
-    registryTC001.run();
-});
+//     const registryTC001: Executable = new TelemetryEnablerRunner(registryVariant);
+//     registryTC001.run();
+// });

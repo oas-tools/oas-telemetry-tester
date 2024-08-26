@@ -9,6 +9,16 @@ function myUrlBuilder(config: { problemSize: number; baseURL: any; agreementId: 
     const endDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 + 1000 * 60 * 60 * config.problemSize).toISOString();
     return `${config.baseURL}/agreements/${config.agreementId}/guarantees?from=${startDate}&to=${endDate}&newPeriodsFromGuarantees=false`;
 }
+/**
+ * 
+ * @param i iteration number of apiPecker
+ * @param size number of requests before a big delay
+ * Regisrty calls the collector, which is restarted every minute for performance reasons.
+ * We have to make some requests and then wait for the collector to restart.
+ */
+const delay = (i: number, size=5) => {//i starts from 1
+    return (i % (size + 1) === 0) ? 2000 : 500;
+}
 
 
 export class RegistryTelemetryEnablerVariant implements TelemetryEnablerVariant {
