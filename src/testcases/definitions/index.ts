@@ -1,8 +1,8 @@
 import { Executable } from "../../types";
 
 
-export interface TelemetryEnablerVariant {
-    config: TelemetryEnablerConfig;
+export interface TelemetryEnablerImpl {
+    config: TelemetryEnablerConfig | null;
     startApp(): Promise<void>;
     checkAppStarted(): Promise<boolean>;
     checkTelemetryStatus(): Promise<boolean>;
@@ -28,8 +28,8 @@ export interface TelemetryIntervalConfig {
     ordersOfMagnitude: number;
 }
 
-export interface TelemetryIntervalsVariant {
-    config: TelemetryIntervalConfig;
+export interface TelemetryIntervalsImpl {
+    config: TelemetryIntervalConfig | null;
     startApp(): Promise<void>;
     checkAppStarted(): Promise<boolean>;
     checkTelemetryStatus(): Promise<boolean>;
@@ -41,34 +41,36 @@ export interface TelemetryIntervalsVariant {
 
 
 export class TelemetryEnablerRunner implements Executable {
-    variant: TelemetryEnablerVariant
-    constructor(variant: TelemetryEnablerVariant) {
-        this.variant = variant;
+    testTypeImpl: TelemetryEnablerImpl
+    constructor(testType: TelemetryEnablerImpl) {
+        this.testTypeImpl = testType;
     }
-    run = async () => {
-        await this.variant.startApp();
-        await this.variant.checkAppStarted();
-        await this.variant.checkTelemetryStatus();
-        await this.variant.runTests();
-        await this.variant.stopApp();
+    run = async (config: TelemetryEnablerConfig) => {
+        this.testTypeImpl.config = config;
+        await this.testTypeImpl.startApp();
+        await this.testTypeImpl.checkAppStarted();
+        await this.testTypeImpl.checkTelemetryStatus();
+        await this.testTypeImpl.runTests();
+        await this.testTypeImpl.stopApp();
     }
 }
 
 
 export class TelemetryIntervalsRunner implements Executable {
-    variant: TelemetryIntervalsVariant
-    constructor(variant: TelemetryIntervalsVariant) {
-        this.variant = variant;
+    testTypeImpl: TelemetryIntervalsImpl
+    constructor(testTypeImpl: TelemetryIntervalsImpl) {
+        this.testTypeImpl = testTypeImpl;
     }
-    run = async () => {
-        await this.variant.startApp();
-        await this.variant.checkAppStarted();
-        await this.variant.checkTelemetryStatus();
-        await this.variant.runTests();
-        await this.variant.stopTelemetry();
-        await this.variant.runTests();
-        await this.variant.startTelemetry();
-        await this.variant.runTests();
-        await this.variant.stopApp();
+    run = async (config: TelemetryIntervalConfig) => {
+        this.testTypeImpl.config = config;
+        await this.testTypeImpl.startApp();
+        await this.testTypeImpl.checkAppStarted();
+        await this.testTypeImpl.checkTelemetryStatus();
+        await this.testTypeImpl.runTests();
+        await this.testTypeImpl.stopTelemetry();
+        await this.testTypeImpl.runTests();
+        await this.testTypeImpl.startTelemetry();
+        await this.testTypeImpl.runTests();
+        await this.testTypeImpl.stopApp();
     }
 }

@@ -8,6 +8,11 @@ export type CombinableParameters = {
     [key: string]: any[]
 }
 
+
+export interface TestCaseConfig {
+    fixed: { [key: string]: any },
+    combinations: CombinableParameters;
+}
 export type HeapStats = {
     "total_heap_size": 57.348,
     "total_heap_size_executable": 2,
@@ -37,5 +42,5 @@ export type ApiPeckerResults = {
 }
 
 export interface Executable {
-    run(): void;
+    run(config:any): Promise<void>;
 }
