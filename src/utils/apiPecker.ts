@@ -1,43 +1,67 @@
 import { run } from 'apipecker';
 import fs from 'fs';
 import axios from 'axios';
-import { HeapStats, ApiPeckerResults } from '../types';
+import { HeapStats, ApiPeckerResults, TestConfig, HeapAndResponseTimesConfig } from '../types';
+import { ArrayConfig, flattenObject } from '.';
+import { logger } from './logger';
 
 
 
-export const runTests = async function (config: any): Promise<void> {
-    const { concurrentUsers, requests, delay, problemSize, urlBuilder } = config;
+export const getHeapStatsAndResopnseTimes = async function (testConfig: TestConfig, runConfig: HeapAndResponseTimesConfig): Promise<void> {
 
-    axios.get(config.baseURL + "/heapStats").then((response) => {
-        const heapStatsBefore: HeapStats = response.data;
-        return new Promise((resolve, reject) => {
+    try {
+        const heapStatsBefore: HeapStats = (await axios.get(testConfig.baseURL + "/heapStats")).data;
+        
+        logger.log("Starting " + testConfig.testname + " test at " + new Date().toISOString() + " requesting " + runConfig.requests + " times");
+        return new Promise<void>((resolve, reject) => {
             run({
-                concurrentUsers,
-                iterations: requests,
-                delay: delay,
+                concurrentUsers: testConfig.concurrentUsers,
+                iterations: runConfig.requests,
+                delay: runConfig.delay,
+                url: runConfig.url,
                 verbose: true,
-                urlBuilder,
-                resultsHandler: (results: any) => myResultsHandler(results, heapStatsBefore, config).then(resolve).catch(reject),
-            });
+                consoleLogging: true,
+                timeout: testConfig.orderOfMagnitude.secureResponseTime,
+                resultsHandler: (results: any) => myResultsHandler(results, heapStatsBefore, testConfig, runConfig).then(() => resolve()).catch((error) => reject(error)),
+            })
         });
-    }).catch((error) => {
-        console.log("Error getting heapStats before: " + error.message);
-    });
+    } catch (error) {
+        logger.log("Error getting heapStats before: " + error.message);
+    }
 }
 
 
-async function myResultsHandler(results: ApiPeckerResults, heapStatsBefore: HeapStats, config: { baseURL: string; testname: string; concurrentUsers: any; requests: any; delay: any; problemSize: any; }) : Promise<void> {
-    let heapStatsAfter;
-    axios.get(config.baseURL + "/heapStats").then((response) => {
-        heapStatsAfter = response.data;
-        const timestamp = new Date().toISOString();
-        const line = `"${config.testname}",${config.concurrentUsers},${config.requests},${config.delay},${config.problemSize},${results.summary.count},${results.summary.min},${results.summary.max},${results.summary.mean},${results.summary.std},${heapStatsBefore.total_heap_size},${heapStatsBefore.total_heap_size_executable},${heapStatsBefore.total_physical_size},${heapStatsBefore.total_available_size},${heapStatsBefore.used_heap_size},${heapStatsBefore.heap_size_limit},${heapStatsBefore.malloced_memory},${heapStatsBefore.peak_malloced_memory},${heapStatsBefore.does_zap_garbage},${heapStatsBefore.number_of_native_contexts},${heapStatsBefore.number_of_detached_contexts},${heapStatsBefore.total_global_handles_size},${heapStatsBefore.used_global_handles_size},${heapStatsBefore.external_memory},${heapStatsAfter.total_heap_size},${heapStatsAfter.total_heap_size_executable},${heapStatsAfter.total_physical_size},${heapStatsAfter.total_available_size},${heapStatsAfter.used_heap_size},${heapStatsAfter.heap_size_limit},${heapStatsAfter.malloced_memory},${heapStatsAfter.peak_malloced_memory},${heapStatsAfter.does_zap_garbage},${heapStatsAfter.number_of_native_contexts},${heapStatsAfter.number_of_detached_contexts},${heapStatsAfter.total_global_handles_size},${heapStatsAfter.used_global_handles_size},${heapStatsAfter.external_memory},${timestamp}\n`;
 
-        fs.writeFileSync("output.csv", line, { flag: 'a+' });
-        console.log("Finished " + config.testname);
+
+async function myResultsHandler(results: ApiPeckerResults, heapStatsBefore: HeapStats, testConfig: TestConfig, runConfig: HeapAndResponseTimesConfig): Promise<void> {
+    logger.log("Getting heapStats after " + testConfig.testname);
+    axios.get(testConfig.baseURL + "/heapStats").then((response) => {
+        let heapStatsAfter = response.data;
+
+        const selectedKeys = ["total_heap_size", "total_heap_size_executable", "used_heap_size", "heap_size_limit", "malloced_memory"];
+        const apiPeckerPrintableProperties = [...testConfig.printableProperties];
+        const flattenTestConfig = flattenObject(testConfig, { arrays: ArrayConfig.SKIP });
+        const headersKeys = ["timestamp", "responseTime", ...apiPeckerPrintableProperties, ...Object.keys(runConfig), ...selectedKeys.map(e => e + "_before"), ...selectedKeys.map(e => e + "_after")];
+        const headers = headersKeys.join(',') + "\n";
+
+        fs.writeFileSync("outputs/response-times.csv", headers, { flag: 'a+' });
+        for (const stat of results.lotStats) {
+            const timestamp = stat.result.summary.startTimeISO
+            const responseTime = stat.result.summary.mean //its just one user, so mean is the same as the value
+            const line =
+                `${timestamp},${responseTime},`
+                + apiPeckerPrintableProperties.map( e => flattenTestConfig[e]).join(',') + ','
+                + Object.values(runConfig).join(',') + ','
+                + Object.keys(heapStatsBefore).filter(e => selectedKeys.includes(e)).map(e => heapStatsBefore[e]).join(',') + ','
+                + Object.keys(heapStatsAfter).filter(e => selectedKeys.includes(e)).map(e => heapStatsAfter[e]).join(',') + "\n";
+
+
+            fs.writeFileSync("outputs/response-times.csv", line, { flag: 'a+' });
+        }
+        logger.log("Finished " + testConfig.testname);
         Promise.resolve();
     }).catch((error) => {
-        console.log("Error getting heapStats after: " + error.message);
+        logger.log("Error getting heapStats after: " + error);
         Promise.reject();
     });
 }
