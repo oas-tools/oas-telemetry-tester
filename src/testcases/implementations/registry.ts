@@ -1,108 +1,151 @@
 import axios from "axios";
 import { checkTelemetryEndpoint, executeCommand } from "../../utils";
-import { runTests } from "../../utils/apiPecker";
-import { TelemetryEnablerConfig, TelemetryEnablerImpl, TelemetryIntervalConfig, TelemetryIntervalsImpl } from "../definitions";
+import { getHeapStatsAndResopnseTimes } from "../../utils/apiPecker";
+import { TelemetryEnabler, TelemetryIntervals } from "../definitions";
 import path from "path";
+import { logger } from "../../utils/logger";
+import { startDockerStats, stopDockerStats } from "../../utils/dockerStats";
+import { HeapAndResponseTimesConfig, TestConfig } from "../../types";
 
-const DOCKERFILE_PATH = path.resolve(process.env.DOCKERFILE_PATH || "../../bluejay/bluejay-infrastructure/docker-bluejay/docker-compose.yaml");
-const ENV_PATH = path.resolve(process.env.ENV_PATH || "../../bluejay/bluejay-infrastructure/.env");
+const DOCKERFILE_PATH = path.resolve(process.env.DOCKERFILE_PATH || "../../bluejay-infrastructure/docker-bluejay/docker-compose.yaml");
+const ENV_PATH = path.resolve(process.env.ENV_FILE_PATH || "../../bluejay-infrastructure/.env");
+const MAX_TIME_AVAILABLE = 45000
 
-
-function myUrlBuilder(config: { problemSize: number; baseURL: any; agreementId: any; }) {
-    //problemSize is hours. Start date is a year ago, end date is start date + problemSize (in hours)
-    const startDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365).toISOString();
-    const endDate = new Date(Date.now() - 1000 * 60 * 60 * 24 * 365 + 1000 * 60 * 60 * config.problemSize).toISOString();
-    return `${config.baseURL}/agreements/${config.agreementId}/guarantees?from=${startDate}&to=${endDate}&newPeriodsFromGuarantees=false`;
+function getSecondsUntilNextMinute(secondOffset = 5, now = new Date().getSeconds()) {
+    let remainingSeconds = Math.abs(60 - now + secondOffset) % 60;
+    return remainingSeconds;
 }
+
+async function awaitCollectorReset() {
+    let secondUntilReady = getSecondsUntilNextMinute();
+    logger.log("Waiting " + secondUntilReady + " seconds to start test to avoid collector reset");
+    await new Promise((resolve) => setTimeout(resolve, secondUntilReady * 1000));
+}
+
+function myUrlBuilder(problemSize: number, baseURL: any, agreementId: any) {
+    //problemSize is hours.
+    const startDate = new Date(2024, 1, 1, 5, 0, 0, 0);
+    const endDate = new Date(startDate.getTime() + 1000 * 60 * 60 * problemSize - 1);
+    const url = `${baseURL}/api/v6/states/${agreementId}/guarantees?from=${startDate.toISOString()}&to=${endDate.toISOString()}&newPeriodsFromGuarantees=false`;
+    logger.log(url);
+    return url;
+}
+
 /**
  * 
- * @param i iteration number of apiPecker
- * @param size number of requests before a big delay
- * Regisrty calls the collector, which is restarted every minute for performance reasons.
- * We have to make some requests and then wait for the collector to restart.
+ * @param secureResponseTime More than the maximum response time of the request to registry
+ * @returns 
  */
-const delay = (i: number, size = 5) => {//i starts from 1
-    return (i % (size + 1) === 0) ? 2000 : 500;
+const getNumberOfRequestsInAvailableSeconds = (secureResponseTime: number) => {
+    //45 seconds available 55-10 reseting
+    return Math.floor(MAX_TIME_AVAILABLE / secureResponseTime);
 }
 
 
-export const registryTelemetryEnablerImpl: TelemetryEnablerImpl = {
 
-    config: null,
-    async startApp(): Promise<void> {
-        return await _startApp(this.config.telemetryInApp);
-    },
-    async checkAppStarted(): Promise<boolean> {
-        return await _checkAppStarted(this.config.baseURL);
-    },
-    async checkTelemetryStatus(): Promise<boolean> {
-        return await checkTelemetryEndpoint(this.config.baseURL + "/telemetry", 200);
-    },
-    async runTests(): Promise<void> {
-        return await runTests(this.config);
-    },
-    async stopApp(): Promise<void> {
-        return Promise.resolve(); //Docker start updates the app. Stopping is not necessary.
-    }
-}
+export class RegistryTelemetryEnabler extends TelemetryEnabler {
 
-export class RegistryTelemetryIntervalTestType implements TelemetryIntervalsImpl {
-    constructor(config: TelemetryIntervalConfig) {
-        this.config = config;
+    startApp(): Promise<void> {
+        return _startApp(this.config.telemetryInApp);
     }
-    config: TelemetryIntervalConfig;
-    async startApp(): Promise<void> {
-        return await _startApp(this.config.telemetryInApp);
+    checkAppStarted(): Promise<boolean> {
+        return _checkAppStarted(this.config.baseURL);
     }
-    async checkAppStarted(): Promise<boolean> {
-        return await _checkAppStarted(this.config.baseURL);
+    checkTelemetryStatus(): Promise<boolean> {
+        return checkTelemetryEndpoint(this.config.baseURL + "/telemetry", 200);
     }
-    async checkTelemetryStatus(): Promise<boolean> {
-        return  await checkTelemetryEndpoint(this.config.baseURL + "/telemetry", 200);
-    }
-    async runTests(): Promise<void> {
-        let requests = this.config.requests / 3;
-        let config = { ...this.config, requests };
-        return await runTests(config);
-    }
-    async startTelemetry(): Promise<void> {
-        return await axios.post(`${this.config.baseURL}/telemetry/start`);
-    }
-    async stopTelemetry(): Promise<void> {
-        return await axios.post(`${this.config.baseURL}/telemetry/stop`);
+    runTests(): Promise<void> {
+        return _runTests(this.config);
     }
     stopApp(): Promise<void> {
-        return Promise.resolve(); //Docker start updates the app. Stopping is not necessary.
+        return _stopDockerContainer();
+    }
+    startTelemetry(): Promise<void> {
+        return axios.get(`${this.config.baseURL}/telemetry/start`);
     }
 
 }
 
+export class RegistryTelemetryInterval extends TelemetryIntervals {
 
+    startApp(): Promise<void> {
+        return _startApp(this.config.telemetryInApp);
+    }
+    checkAppStarted(): Promise<boolean> {
+        return _checkAppStarted(this.config.baseURL);
+    }
+    checkTelemetryStatus(): Promise<boolean> {
+        return checkTelemetryEndpoint(this.config.baseURL + "/telemetry", 200);
+    }
+    runTests(): Promise<void> {
+        return _runTests(this.config);
+    }
+    startTelemetry(): Promise<void> {
+        return axios.get(`${this.config.baseURL}/telemetry/start`);
+    }
+    stopTelemetry(): Promise<void> {
+        return axios.get(`${this.config.baseURL}/telemetry/stop`);
+    }
+    stopApp(): Promise<void> {
+        return _stopDockerContainer();
+    }
+
+}
+
+async function _runTests(config: TestConfig): Promise<void> {
+    for(let i = 0; i < config.minutesPerTest; i++) {
+        logger.log("Starting test for minute " + (i+1) + " of " + config.minutesPerTest);
+        await awaitCollectorReset();
+        await startDockerStats(config);
+        let url = myUrlBuilder(config.orderOfMagnitude.value, config.baseURL, config.agreementId);
+        const responseTime = config.orderOfMagnitude.secureResponseTime;
+        let runConfig : HeapAndResponseTimesConfig = { requests: getNumberOfRequestsInAvailableSeconds(responseTime), url, delay: responseTime };
+        await getHeapStatsAndResopnseTimes(config,runConfig);
+        stopDockerStats(config.containerName);
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+}
 
 
 async function _startApp(telemetryInApp: boolean): Promise<void> {
     await _stopDockerContainer();
-    let DOCKER_START_COMMAND = `export NEW_RELIC_LICENSE_KEY="" && exort TELEMETRY_ENABLED=${telemetryInApp} && docker-compose -f ${DOCKERFILE_PATH} --env-file ${ENV_PATH} up -d bluejay-registry`;
-    if( process.platform === "win32"){
+    let DOCKER_START_COMMAND = `export NEW_RELIC_LICENSE_KEY="" && export TELEMETRY_ENABLED=${telemetryInApp} && docker-compose -f ${DOCKERFILE_PATH} --env-file ${ENV_PATH} up -d bluejay-registry`;
+    if (process.platform === "win32") {
         DOCKER_START_COMMAND = `set NEW_RELIC_LICENSE_KEY="" && set TELEMETRY_ENABLED=${telemetryInApp} && docker-compose -f ${DOCKERFILE_PATH} --env-file ${ENV_PATH} up -d bluejay-registry`;
     }
 
     await executeCommand(DOCKER_START_COMMAND);
-    console.log('Docker containers started successfully.');
+    logger.log('Docker containers started successfully.');
+    return Promise.resolve();
 
 }
 
 async function _checkAppStarted(baseURL: string): Promise<boolean> {
-    const response = await axios.get(baseURL, { timeout: 8000 });
-    return response.status === 200;
+    //Polling the endpoint until it returns 200
+    const MAX_SECONDS = 100;
+    const INTERVAL = 1000;
+    let i = 0;
+    while (i < MAX_SECONDS) {
+        try {
+            await axios.get(baseURL);
+            logger.log('App started successfully.');
+            return true;
+        } catch (error) {
+            logger.log('Waiting for app to start...');
+        }
+        await new Promise(resolve => setTimeout(resolve, INTERVAL));
+        i++;
+    }
+    return false;
+
 }
 async function _stopDockerContainer(): Promise<void> {
-    const DOCKER_STOP_COMMAND = `docker kill bluejay-registry`;
+    const DOCKER_STOP_COMMAND = `docker stop bluejay-registry`;
     try {
-        await executeCommand(DOCKER_STOP_COMMAND);
-        console.log('Docker container "bluejay-registry" stopped successfully.');
+        executeCommand(DOCKER_STOP_COMMAND);
+        logger.log('Docker container "bluejay-registry" stopped successfully.');
     } catch (error) {
-        console.error('Failed to stop Docker container:', error.message);
+        logger.error('Failed to stop Docker container:', error.message);
     }
 }
 
